@@ -1,0 +1,726 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1">
+  <title>MercatPremium</title>
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/css/bootstrap.min.css" rel="stylesheet">
+  <link href="https://cdn.jsdelivr.net/npm/bootstrap-icons@1.11.0/font/bootstrap-icons.css" rel="stylesheet">
+  <style>
+    :root {
+      --primary: #1a73e8;
+      --success: #34a853;
+      --warning: #fbbc04;
+      --danger:  #ea4335;
+      --sold-bg: #f1f3f4;
+    }
+    body { background: #f8f9fa; font-family: 'Segoe UI', sans-serif; }
+
+    /* ── Navbar ── */
+    .navbar-brand span { color: var(--primary); font-weight: 800; }
+    .navbar-brand small { color: #666; font-size: .7rem; display: block; line-height: 1; }
+
+    /* ── Stat cards ── */
+    .stat-card { border: none; border-radius: 12px; transition: transform .15s; }
+    .stat-card:hover { transform: translateY(-2px); }
+    .stat-icon { width: 48px; height: 48px; border-radius: 12px;
+      display: flex; align-items: center; justify-content: center; font-size: 1.4rem; }
+
+    /* ── Item cards ── */
+    .item-card { border: none; border-radius: 14px; transition: transform .15s, box-shadow .15s; overflow: hidden; }
+    .item-card:hover { transform: translateY(-3px); box-shadow: 0 8px 24px rgba(0,0,0,.12); }
+    .item-card.sold { opacity: .65; }
+    .item-thumb { width: 100%; height: 180px; object-fit: cover; background: #e9ecef;
+      display: flex; align-items: center; justify-content: center; font-size: 3rem; color: #adb5bd; }
+    .item-thumb img { width: 100%; height: 180px; object-fit: cover; }
+
+    .badge-estado { font-size: .72rem; padding: .3em .6em; border-radius: 20px; }
+    .badge-disponible { background: #d4f5e2; color: #1e6e3b; }
+    .badge-vendido    { background: #f8d7da; color: #842029; }
+    .badge-reservado  { background: #fff3cd; color: #856404; }
+
+    /* ── Modals ── */
+    .modal-header { background: var(--primary); color: #fff; border-radius: 12px 12px 0 0; }
+    .modal-header .btn-close { filter: invert(1); }
+    .modal-title i { margin-right: .4rem; }
+    .modal-content { border: none; border-radius: 12px; }
+
+    /* ── Photo gallery ── */
+    .photo-grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(140px, 1fr)); gap: 12px; }
+    .photo-item { position: relative; border-radius: 10px; overflow: hidden; cursor: pointer; }
+    .photo-item img { width: 100%; height: 130px; object-fit: cover; }
+    .photo-overlay { position: absolute; inset: 0; background: rgba(0,0,0,.45);
+      opacity: 0; transition: opacity .2s; display: flex; align-items: center;
+      justify-content: center; gap: 8px; }
+    .photo-item:hover .photo-overlay { opacity: 1; }
+    .photo-main-badge { position: absolute; top: 6px; left: 6px;
+      background: var(--primary); color: #fff; font-size: .65rem;
+      padding: .2em .5em; border-radius: 20px; }
+
+    /* ── Listing text area ── */
+    #listingText { font-family: monospace; font-size: .9rem; resize: vertical; min-height: 160px; }
+
+    /* ── Empty state ── */
+    .empty-state { text-align: center; padding: 60px 20px; }
+    .empty-state i { font-size: 4rem; color: #ced4da; }
+
+    /* ── Filter bar ── */
+    .filter-bar .form-control, .filter-bar .form-select {
+      border-radius: 20px; border: 1px solid #dee2e6; font-size: .88rem; }
+
+    /* ── Loading overlay ── */
+    #loadingOverlay { position: fixed; inset: 0; background: rgba(255,255,255,.8);
+      display: flex; align-items: center; justify-content: center; z-index: 9999; }
+
+    /* ── Toast ── */
+    #toastContainer { position: fixed; bottom: 1.5rem; right: 1.5rem; z-index: 11000; }
+  </style>
+</head>
+<body>
+
+<!-- ───────── NAVBAR ───────── -->
+<nav class="navbar navbar-light bg-white shadow-sm px-3 py-2">
+  <span class="navbar-brand mb-0">
+    <i class="bi bi-bag-heart-fill text-primary fs-4 me-2"></i>
+    <span>MercatPremium</span>
+    <small>Segunda mano organizada</small>
+  </span>
+  <div class="d-flex gap-2">
+    <button class="btn btn-sm btn-outline-secondary" onclick="openDrive()" title="Abrir Drive">
+      <i class="bi bi-folder2-open"></i>
+    </button>
+    <button class="btn btn-primary btn-sm rounded-pill px-3" onclick="showAddModal()">
+      <i class="bi bi-plus-lg me-1"></i>Nuevo artículo
+    </button>
+  </div>
+</nav>
+
+<!-- ───────── LOADING ───────── -->
+<div id="loadingOverlay">
+  <div class="text-center">
+    <div class="spinner-border text-primary mb-2" role="status"></div>
+    <div class="text-muted small" id="loadingMsg">Cargando inventario…</div>
+  </div>
+</div>
+
+<!-- ───────── CONTENIDO PRINCIPAL ───────── -->
+<div class="container-fluid px-3 py-3">
+
+  <!-- Stats -->
+  <div class="row g-3 mb-3" id="statsRow">
+    <div class="col-6 col-md-3">
+      <div class="card stat-card shadow-sm p-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="stat-icon bg-primary bg-opacity-10 text-primary"><i class="bi bi-box-seam"></i></div>
+          <div>
+            <div class="fs-4 fw-bold" id="statTotal">—</div>
+            <div class="text-muted small">Total</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card stat-card shadow-sm p-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="stat-icon bg-success bg-opacity-10 text-success"><i class="bi bi-tag"></i></div>
+          <div>
+            <div class="fs-4 fw-bold text-success" id="statDisponibles">—</div>
+            <div class="text-muted small">Disponibles</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card stat-card shadow-sm p-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="stat-icon bg-danger bg-opacity-10 text-danger"><i class="bi bi-check2-circle"></i></div>
+          <div>
+            <div class="fs-4 fw-bold text-danger" id="statVendidos">—</div>
+            <div class="text-muted small">Vendidos · <span id="statIngreso">0</span>€</div>
+          </div>
+        </div>
+      </div>
+    </div>
+    <div class="col-6 col-md-3">
+      <div class="card stat-card shadow-sm p-3">
+        <div class="d-flex align-items-center gap-3">
+          <div class="stat-icon bg-warning bg-opacity-10 text-warning"><i class="bi bi-currency-euro"></i></div>
+          <div>
+            <div class="fs-4 fw-bold text-warning" id="statValor">—</div>
+            <div class="text-muted small">Valor stock (€)</div>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Filtros -->
+  <div class="filter-bar d-flex flex-wrap gap-2 mb-3">
+    <input type="search" id="searchInput" class="form-control" style="max-width:240px"
+           placeholder="Buscar artículo…" oninput="renderItems()">
+    <select id="filterCategoria" class="form-select" style="max-width:180px" onchange="renderItems()">
+      <option value="">Todas las categorías</option>
+    </select>
+    <select id="filterEstado" class="form-select" style="max-width:160px" onchange="renderItems()">
+      <option value="">Todos los estados</option>
+      <option value="Disponible">Disponible</option>
+      <option value="Reservado">Reservado</option>
+      <option value="Vendido">Vendido</option>
+    </select>
+    <button class="btn btn-outline-secondary btn-sm rounded-pill" onclick="loadData()">
+      <i class="bi bi-arrow-clockwise"></i>
+    </button>
+  </div>
+
+  <!-- Grid de artículos -->
+  <div id="itemsGrid" class="row g-3"></div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     MODAL: Añadir / Editar artículo
+═══════════════════════════════════════════════ -->
+<div class="modal fade" id="itemModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-pencil-square"></i><span id="itemModalTitle">Nuevo artículo</span></h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="editId">
+        <div class="row g-3">
+          <div class="col-md-8">
+            <label class="form-label fw-semibold">Nombre del artículo <span class="text-danger">*</span></label>
+            <input type="text" id="iNombre" class="form-control" placeholder="Ej: Camisa azul talla M" required>
+          </div>
+          <div class="col-md-4">
+            <label class="form-label fw-semibold">Precio (€) <span class="text-danger">*</span></label>
+            <div class="input-group">
+              <input type="number" id="iPrecio" class="form-control" min="0" step="0.5" placeholder="0.00" required>
+              <span class="input-group-text">€</span>
+            </div>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Categoría</label>
+            <select id="iCategoria" class="form-select">
+              <option value="Ropa">Ropa</option>
+              <option value="Calzado">Calzado</option>
+              <option value="Electrodomesticos">Electrodomésticos</option>
+              <option value="Electronica">Electrónica</option>
+              <option value="Muebles">Muebles</option>
+              <option value="Libros">Libros</option>
+              <option value="Juguetes">Juguetes</option>
+              <option value="Deporte">Deporte</option>
+              <option value="Hogar">Hogar</option>
+              <option value="Otros">Otros</option>
+            </select>
+          </div>
+          <div class="col-md-6">
+            <label class="form-label fw-semibold">Estado del artículo</label>
+            <select id="iEstadoArticulo" class="form-select">
+              <option value="Nuevo con etiqueta">Nuevo con etiqueta</option>
+              <option value="Como nuevo" selected>Como nuevo</option>
+              <option value="Buen estado">Buen estado</option>
+              <option value="Aceptable">Aceptable</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Descripción</label>
+            <textarea id="iDescripcion" class="form-control" rows="3"
+              placeholder="Describe el artículo: talla, color, uso, motivo de venta…"></textarea>
+          </div>
+          <div class="col-md-6" id="editEstadoVentaGroup" style="display:none">
+            <label class="form-label fw-semibold">Estado de venta</label>
+            <select id="iEstadoVenta" class="form-select" onchange="togglePlatform()">
+              <option value="Disponible">Disponible</option>
+              <option value="Reservado">Reservado</option>
+              <option value="Vendido">Vendido</option>
+            </select>
+          </div>
+          <div class="col-md-6" id="platformGroup" style="display:none">
+            <label class="form-label fw-semibold">Plataforma de venta</label>
+            <select id="iPlataforma" class="form-select">
+              <option value="">—</option>
+              <option value="Wallapop">Wallapop</option>
+              <option value="Vinted">Vinted</option>
+              <option value="Facebook">Grupo Facebook</option>
+              <option value="Particular">Particular</option>
+            </select>
+          </div>
+          <div class="col-12">
+            <label class="form-label fw-semibold">Notas internas</label>
+            <input type="text" id="iNotas" class="form-control" placeholder="Notas privadas (no aparecen en el anuncio)">
+          </div>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button type="button" class="btn btn-secondary" data-bs-dismiss="modal">Cancelar</button>
+        <button type="button" class="btn btn-primary px-4" onclick="saveItem()">
+          <i class="bi bi-floppy me-1"></i>Guardar
+        </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     MODAL: Fotos
+═══════════════════════════════════════════════ -->
+<div class="modal fade" id="photosModal" tabindex="-1">
+  <div class="modal-dialog modal-lg modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-images"></i>Fotos del artículo</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="alert alert-info d-flex align-items-start gap-2 mb-3">
+          <i class="bi bi-info-circle-fill mt-1"></i>
+          <div>
+            <strong>¿Cómo subir fotos?</strong><br>
+            Haz clic en <strong>"Abrir carpeta"</strong> y sube las fotos directamente en Google Drive.
+            Luego vuelve aquí y pulsa <strong>"Recargar fotos"</strong>.
+          </div>
+        </div>
+        <div class="d-flex justify-content-between align-items-center mb-3">
+          <span class="text-muted small" id="photoCount">0 fotos</span>
+          <div class="d-flex gap-2">
+            <button class="btn btn-outline-primary btn-sm" onclick="openItemFolder()">
+              <i class="bi bi-folder2-open me-1"></i>Abrir carpeta
+            </button>
+            <button class="btn btn-outline-secondary btn-sm" onclick="reloadPhotos()">
+              <i class="bi bi-arrow-clockwise me-1"></i>Recargar fotos
+            </button>
+          </div>
+        </div>
+        <div id="photoGrid" class="photo-grid"></div>
+        <div id="noPhotos" class="empty-state" style="display:none">
+          <i class="bi bi-camera"></i>
+          <p class="mt-3 text-muted">Todavía no hay fotos.<br>Ábrela carpeta en Drive y sube las imágenes.</p>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     MODAL: Generar anuncio
+═══════════════════════════════════════════════ -->
+<div class="modal fade" id="listingModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered">
+    <div class="modal-content">
+      <div class="modal-header">
+        <h5 class="modal-title"><i class="bi bi-megaphone"></i>Generar anuncio</h5>
+        <button type="button" class="btn-close" data-bs-dismiss="modal"></button>
+      </div>
+      <div class="modal-body">
+        <div class="d-flex gap-2 mb-3" role="group">
+          <button class="btn btn-outline-danger flex-fill" onclick="generateListing('wallapop')" id="btnWallapop">
+            <i class="bi bi-w-circle me-1"></i>Wallapop
+          </button>
+          <button class="btn btn-outline-primary flex-fill" onclick="generateListing('vinted')" id="btnVinted">
+            <i class="bi bi-handbag me-1"></i>Vinted
+          </button>
+          <button class="btn btn-outline-primary flex-fill" onclick="generateListing('facebook')" id="btnFacebook"
+            style="--bs-btn-color:#1877F2;--bs-btn-border-color:#1877F2;--bs-btn-hover-bg:#1877F2;--bs-btn-hover-color:#fff">
+            <i class="bi bi-facebook me-1"></i>Facebook
+          </button>
+        </div>
+        <label class="form-label fw-semibold small text-muted">TEXTO DEL ANUNCIO</label>
+        <textarea id="listingText" class="form-control" readonly></textarea>
+        <div class="d-flex justify-content-end mt-2">
+          <button class="btn btn-success btn-sm" onclick="copyListing()">
+            <i class="bi bi-clipboard-check me-1"></i>Copiar texto
+          </button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- ═══════════════════════════════════════════════
+     MODAL: Confirmar borrado
+═══════════════════════════════════════════════ -->
+<div class="modal fade" id="deleteModal" tabindex="-1">
+  <div class="modal-dialog modal-dialog-centered modal-sm">
+    <div class="modal-content">
+      <div class="modal-body text-center p-4">
+        <i class="bi bi-trash3 text-danger fs-1 mb-3 d-block"></i>
+        <h6>¿Eliminar artículo?</h6>
+        <p class="text-muted small mb-4">Se moverá también la carpeta de fotos a la papelera de Drive.</p>
+        <div class="d-flex gap-2 justify-content-center">
+          <button class="btn btn-secondary btn-sm" data-bs-dismiss="modal">Cancelar</button>
+          <button class="btn btn-danger btn-sm" onclick="confirmDelete()">Eliminar</button>
+        </div>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- Toast de notificaciones -->
+<div id="toastContainer"></div>
+
+<script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.0/dist/js/bootstrap.bundle.min.js"></script>
+<script>
+// ════════════════════════════════════════════════════════
+//  ESTADO GLOBAL
+// ════════════════════════════════════════════════════════
+var allItems   = [];
+var setup      = {};
+var currentItemId    = null;
+var currentFolderId  = null;
+var currentMainPhoto = null;
+var deleteTargetId   = null;
+
+// ════════════════════════════════════════════════════════
+//  ARRANQUE
+// ════════════════════════════════════════════════════════
+document.addEventListener('DOMContentLoaded', loadData);
+
+function loadData() {
+  showLoading('Cargando inventario…');
+  google.script.run
+    .withSuccessHandler(onInventoryLoaded)
+    .withFailureHandler(onError)
+    .getInventory();
+}
+
+function onInventoryLoaded(result) {
+  if (result.error) { showToast(result.error, 'danger'); hideLoading(); return; }
+  allItems = result.items  || [];
+  setup    = result.setup  || {};
+  populateCategoryFilter();
+  renderItems();
+  loadStats();
+  hideLoading();
+}
+
+function loadStats() {
+  google.script.run
+    .withSuccessHandler(function(s) {
+      if (s.error) return;
+      document.getElementById('statTotal').textContent      = s.total;
+      document.getElementById('statDisponibles').textContent = s.disponibles;
+      document.getElementById('statVendidos').textContent   = s.vendidos;
+      document.getElementById('statIngreso').textContent    = s.ingresoTotal;
+      document.getElementById('statValor').textContent      = s.valorStock;
+    })
+    .getStats();
+}
+
+// ════════════════════════════════════════════════════════
+//  RENDER GRID
+// ════════════════════════════════════════════════════════
+function renderItems() {
+  var search   = document.getElementById('searchInput').value.toLowerCase();
+  var catFilter = document.getElementById('filterCategoria').value;
+  var estFilter = document.getElementById('filterEstado').value;
+
+  var filtered = allItems.filter(function(item) {
+    var matchSearch = !search ||
+      item.nombre.toLowerCase().includes(search) ||
+      item.descripcion.toLowerCase().includes(search) ||
+      item.categoria.toLowerCase().includes(search);
+    var matchCat  = !catFilter || item.categoria === catFilter;
+    var matchEst  = !estFilter || item.estadoVenta === estFilter;
+    return matchSearch && matchCat && matchEst;
+  });
+
+  var grid = document.getElementById('itemsGrid');
+
+  if (filtered.length === 0) {
+    grid.innerHTML = '<div class="col-12"><div class="empty-state"><i class="bi bi-search"></i>' +
+      '<p class="mt-3 text-muted">No hay artículos.<br>Pulsa "Nuevo artículo" para añadir el primero.</p></div></div>';
+    return;
+  }
+
+  grid.innerHTML = filtered.map(function(item) {
+    var badgeClass = item.estadoVenta === 'Vendido'   ? 'badge-vendido'
+                   : item.estadoVenta === 'Reservado' ? 'badge-reservado'
+                   : 'badge-disponible';
+    var soldClass  = item.estadoVenta === 'Vendido' ? ' sold' : '';
+    var thumbHtml  = item.fotoPrincipalId
+      ? '<img src="https://drive.google.com/thumbnail?id=' + item.fotoPrincipalId + '&sz=w400" alt="foto" onerror="this.parentElement.innerHTML=\'<div class=item-thumb><i class=bi bi-image></i></div>\'">'
+      : '<div class="item-thumb"><i class="bi bi-camera"></i></div>';
+
+    return '<div class="col-6 col-md-4 col-lg-3">' +
+      '<div class="card item-card shadow-sm h-100' + soldClass + '">' +
+        '<div class="item-thumb">' + thumbHtml + '</div>' +
+        '<div class="card-body p-2">' +
+          '<div class="d-flex justify-content-between align-items-start mb-1">' +
+            '<span class="badge-estado ' + badgeClass + '">' + item.estadoVenta + '</span>' +
+            '<span class="fw-bold text-primary">' + item.precio + '€</span>' +
+          '</div>' +
+          '<h6 class="card-title mb-1 lh-sm" style="font-size:.88rem">' + escHtml(item.nombre) + '</h6>' +
+          '<p class="card-text text-muted" style="font-size:.75rem">' + escHtml(item.categoria) + '</p>' +
+        '</div>' +
+        '<div class="card-footer bg-transparent p-2 d-flex gap-1 flex-wrap">' +
+          '<button class="btn btn-outline-primary btn-sm flex-fill" style="font-size:.72rem" onclick="showPhotos(\'' + item.id + '\',\'' + item.carpetaId + '\',\'' + (item.fotoPrincipalId||'') + '\')">' +
+            '<i class="bi bi-images"></i></button>' +
+          '<button class="btn btn-outline-success btn-sm flex-fill" style="font-size:.72rem" onclick="showListingModal(\'' + item.id + '\')">' +
+            '<i class="bi bi-megaphone"></i></button>' +
+          '<button class="btn btn-outline-secondary btn-sm flex-fill" style="font-size:.72rem" onclick="showEditModal(\'' + item.id + '\')">' +
+            '<i class="bi bi-pencil"></i></button>' +
+          '<button class="btn btn-outline-danger btn-sm flex-fill" style="font-size:.72rem" onclick="showDeleteModal(\'' + item.id + '\')">' +
+            '<i class="bi bi-trash3"></i></button>' +
+        '</div>' +
+      '</div></div>';
+  }).join('');
+}
+
+function populateCategoryFilter() {
+  var cats = [...new Set(allItems.map(function(i) { return i.categoria; }))].sort();
+  var sel  = document.getElementById('filterCategoria');
+  var val  = sel.value;
+  sel.innerHTML = '<option value="">Todas las categorías</option>' +
+    cats.map(function(c) { return '<option value="' + c + '">' + c + '</option>'; }).join('');
+  sel.value = val;
+}
+
+// ════════════════════════════════════════════════════════
+//  MODAL AÑADIR / EDITAR
+// ════════════════════════════════════════════════════════
+function showAddModal() {
+  document.getElementById('itemModalTitle').textContent = 'Nuevo artículo';
+  document.getElementById('editId').value = '';
+  document.getElementById('iNombre').value       = '';
+  document.getElementById('iPrecio').value       = '';
+  document.getElementById('iCategoria').value    = 'Ropa';
+  document.getElementById('iEstadoArticulo').value = 'Como nuevo';
+  document.getElementById('iDescripcion').value  = '';
+  document.getElementById('iNotas').value        = '';
+  document.getElementById('editEstadoVentaGroup').style.display = 'none';
+  document.getElementById('platformGroup').style.display        = 'none';
+  new bootstrap.Modal(document.getElementById('itemModal')).show();
+}
+
+function showEditModal(id) {
+  var item = allItems.find(function(i) { return i.id === id; });
+  if (!item) return;
+  document.getElementById('itemModalTitle').textContent = 'Editar artículo';
+  document.getElementById('editId').value              = item.id;
+  document.getElementById('iNombre').value             = item.nombre;
+  document.getElementById('iPrecio').value             = item.precio;
+  document.getElementById('iCategoria').value          = item.categoria;
+  document.getElementById('iEstadoArticulo').value     = item.estadoArticulo;
+  document.getElementById('iDescripcion').value        = item.descripcion;
+  document.getElementById('iNotas').value              = item.notas || '';
+  document.getElementById('iEstadoVenta').value        = item.estadoVenta;
+  document.getElementById('iPlataforma').value         = item.plataforma || '';
+  document.getElementById('editEstadoVentaGroup').style.display = '';
+  togglePlatform();
+  new bootstrap.Modal(document.getElementById('itemModal')).show();
+}
+
+function togglePlatform() {
+  var v = document.getElementById('iEstadoVenta').value;
+  document.getElementById('platformGroup').style.display = (v === 'Vendido' || v === 'Reservado') ? '' : 'none';
+}
+
+function saveItem() {
+  var id     = document.getElementById('editId').value;
+  var nombre = document.getElementById('iNombre').value.trim();
+  var precio = document.getElementById('iPrecio').value;
+
+  if (!nombre || !precio) { showToast('Nombre y precio son obligatorios', 'warning'); return; }
+
+  var data = {
+    id:             id,
+    nombre:         nombre,
+    descripcion:    document.getElementById('iDescripcion').value.trim(),
+    categoria:      document.getElementById('iCategoria').value,
+    estadoArticulo: document.getElementById('iEstadoArticulo').value,
+    precio:         precio,
+    notas:          document.getElementById('iNotas').value.trim(),
+    estadoVenta:    document.getElementById('iEstadoVenta').value  || 'Disponible',
+    plataforma:     document.getElementById('iPlataforma').value   || ''
+  };
+
+  showLoading(id ? 'Guardando cambios…' : 'Añadiendo artículo…');
+  bootstrap.Modal.getInstance(document.getElementById('itemModal')).hide();
+
+  if (id) {
+    google.script.run
+      .withSuccessHandler(function(r) {
+        hideLoading();
+        if (r.error) { showToast(r.error, 'danger'); return; }
+        showToast('Artículo actualizado', 'success');
+        loadData();
+      })
+      .withFailureHandler(onError)
+      .updateItem(data);
+  } else {
+    google.script.run
+      .withSuccessHandler(function(r) {
+        hideLoading();
+        if (r.error) { showToast(r.error, 'danger'); return; }
+        showToast('Artículo añadido. Carpeta creada en Drive.', 'success');
+        loadData();
+      })
+      .withFailureHandler(onError)
+      .addItem(data);
+  }
+}
+
+// ════════════════════════════════════════════════════════
+//  FOTOS
+// ════════════════════════════════════════════════════════
+function showPhotos(itemId, folderId, mainPhotoId) {
+  currentItemId   = itemId;
+  currentFolderId = folderId;
+  currentMainPhoto = mainPhotoId;
+  var modal = new bootstrap.Modal(document.getElementById('photosModal'));
+  modal.show();
+  reloadPhotos();
+}
+
+function reloadPhotos() {
+  if (!currentFolderId) return;
+  document.getElementById('photoGrid').innerHTML =
+    '<div class="text-center py-4"><div class="spinner-border text-primary" role="status"></div></div>';
+  google.script.run
+    .withSuccessHandler(renderPhotos)
+    .withFailureHandler(onError)
+    .getItemPhotos(currentFolderId);
+}
+
+function renderPhotos(result) {
+  var grid  = document.getElementById('photoGrid');
+  var empty = document.getElementById('noPhotos');
+  if (result.error) { showToast(result.error, 'danger'); return; }
+  var photos = result.photos;
+  document.getElementById('photoCount').textContent = photos.length + ' foto' + (photos.length === 1 ? '' : 's');
+
+  if (photos.length === 0) {
+    grid.innerHTML = '';
+    empty.style.display = '';
+    return;
+  }
+  empty.style.display = 'none';
+
+  grid.innerHTML = photos.map(function(p) {
+    var isMain = p.id === currentMainPhoto;
+    return '<div class="photo-item" data-id="' + p.id + '">' +
+      (isMain ? '<span class="photo-main-badge"><i class="bi bi-star-fill"></i> Principal</span>' : '') +
+      '<img src="' + p.thumb + '" alt="' + escHtml(p.name) + '" onerror="this.src=\'\'">' +
+      '<div class="photo-overlay">' +
+        '<button class="btn btn-sm btn-light" onclick="setMain(\'' + p.id + '\')" title="Foto principal">' +
+          '<i class="bi bi-star-fill text-warning"></i></button>' +
+        '<a href="' + p.fullUrl + '" target="_blank" class="btn btn-sm btn-light" title="Ver en Drive">' +
+          '<i class="bi bi-eye"></i></a>' +
+      '</div></div>';
+  }).join('');
+}
+
+function setMain(photoId) {
+  google.script.run
+    .withSuccessHandler(function(r) {
+      if (r.error) { showToast(r.error, 'danger'); return; }
+      currentMainPhoto = photoId;
+      showToast('Foto principal actualizada', 'success');
+      reloadPhotos();
+      loadData();
+    })
+    .setMainPhoto(currentItemId, photoId);
+}
+
+function openItemFolder() {
+  if (!currentFolderId) return;
+  window.open('https://drive.google.com/drive/folders/' + currentFolderId, '_blank');
+}
+
+// ════════════════════════════════════════════════════════
+//  GENERAR ANUNCIO
+// ════════════════════════════════════════════════════════
+function showListingModal(id) {
+  currentItemId = id;
+  document.getElementById('listingText').value = '';
+  new bootstrap.Modal(document.getElementById('listingModal')).show();
+}
+
+function generateListing(platform) {
+  var btns = ['btnWallapop','btnVinted','btnFacebook'];
+  btns.forEach(function(b) { document.getElementById(b).disabled = true; });
+  google.script.run
+    .withSuccessHandler(function(r) {
+      btns.forEach(function(b) { document.getElementById(b).disabled = false; });
+      if (r.error) { showToast(r.error, 'danger'); return; }
+      document.getElementById('listingText').value = r.text;
+    })
+    .withFailureHandler(function(e) {
+      btns.forEach(function(b) { document.getElementById(b).disabled = false; });
+      onError(e);
+    })
+    .generateListing(currentItemId, platform);
+}
+
+function copyListing() {
+  var text = document.getElementById('listingText').value;
+  if (!text) return;
+  navigator.clipboard.writeText(text).then(function() {
+    showToast('Texto copiado al portapapeles', 'success');
+  });
+}
+
+// ════════════════════════════════════════════════════════
+//  ELIMINAR
+// ════════════════════════════════════════════════════════
+function showDeleteModal(id) {
+  deleteTargetId = id;
+  new bootstrap.Modal(document.getElementById('deleteModal')).show();
+}
+
+function confirmDelete() {
+  bootstrap.Modal.getInstance(document.getElementById('deleteModal')).hide();
+  showLoading('Eliminando artículo…');
+  google.script.run
+    .withSuccessHandler(function(r) {
+      hideLoading();
+      if (r.error) { showToast(r.error, 'danger'); return; }
+      showToast('Artículo eliminado', 'success');
+      loadData();
+    })
+    .withFailureHandler(onError)
+    .deleteItem(deleteTargetId);
+}
+
+// ════════════════════════════════════════════════════════
+//  DRIVE LINK
+// ════════════════════════════════════════════════════════
+function openDrive() {
+  if (setup.rootFolderUrl) window.open(setup.rootFolderUrl, '_blank');
+}
+
+// ════════════════════════════════════════════════════════
+//  UTILIDADES
+// ════════════════════════════════════════════════════════
+function showLoading(msg) {
+  document.getElementById('loadingMsg').textContent = msg || 'Cargando…';
+  document.getElementById('loadingOverlay').style.display = 'flex';
+}
+function hideLoading() {
+  document.getElementById('loadingOverlay').style.display = 'none';
+}
+
+function showToast(msg, type) {
+  type = type || 'info';
+  var icons = { success:'check-circle-fill', danger:'x-circle-fill', warning:'exclamation-triangle-fill', info:'info-circle-fill' };
+  var id = 'toast-' + Date.now();
+  var html = '<div id="' + id + '" class="toast align-items-center text-bg-' + type + ' border-0 show mb-2" role="alert">' +
+    '<div class="d-flex"><div class="toast-body"><i class="bi bi-' + (icons[type]||'info-circle') + ' me-2"></i>' + escHtml(msg) + '</div>' +
+    '<button type="button" class="btn-close btn-close-white me-2 m-auto" onclick="this.closest(\'.toast\').remove()"></button></div></div>';
+  document.getElementById('toastContainer').insertAdjacentHTML('beforeend', html);
+  setTimeout(function() { var t = document.getElementById(id); if(t) t.remove(); }, 4000);
+}
+
+function onError(e) {
+  hideLoading();
+  showToast('Error: ' + e, 'danger');
+}
+
+function escHtml(str) {
+  return String(str || '').replace(/&/g,'&amp;').replace(/</g,'&lt;').replace(/>/g,'&gt;').replace(/"/g,'&quot;');
+}
+</script>
+</body>
+</html>
